@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Financeiro - Dra. Jessica & Giovana</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background-color: #2c3e50; min-height: 100vh; display: flex; justify-content: center; align-items: center; }
+        #login-screen { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 320px; text-align: center; }
+        #login-screen input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        #login-screen button { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+
+        #main-app { display: none; background: #f4f4f4; width: 100%; min-height: 100vh; padding: 20px; box-sizing: border-box; color: #333; }
+        .container { max-width: 1100px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
+        
+        h1 { text-align: center; color: #2c3e50; }
+        h2 { border-bottom: 2px solid #3498db; padding-bottom: 5px; margin-top: 40px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f8f9fa; font-size: 13px; }
+        
+        .actions-bar { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        button { cursor: pointer; border: none; border-radius: 4px; font-weight: bold; padding: 8px 15px; transition: 0.3s; }
+        button:hover { opacity: 0.8; }
+        
+        .btn-add { background: #5cb85c; color: white; }
+        .btn-print { background: #007bff; color: white; }
+        .btn-pdf { background: #5bc0de; color: white; }
+        .btn-clear { background: #f0ad4e; color: white; }
+        .btn-logout { background: #e74c3c; color: white; float: right; }
+        
+        .total-row { background: #e9ecef; font-weight: bold; font-size: 1.1em; }
+
+        @media print {
+            .btn-add, .actions-bar, .btn-logout, #login-screen, .btn-clear { display: none !important; }
+            body { background: white; padding: 0; }
+            .container { box-shadow: none; width: 100%; padding: 0; }
+            input, select { border: none !important; appearance: none; -webkit-appearance: none; background: transparent; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <h2>🔒 Acesso Restrito</h2>
+        <input type="email" id="email" placeholder="Seu E-mail">
+        <input type="password" id="password" placeholder="Sua Senha">
+        <button onclick="entrar()">Entrar no Sistema</button>
+        <p id="erro-msg" style="color:red; font-size:12px; margin-top:10px;"></p>
+    </div>
+
+    <div id="main-app">
+        <div class="container">
+            <button class="btn-logout" onclick="sair()">Sair</button>
+            <h1>PLANILHA DE PAGAMENTOS DA SEMANA</h1>
+
+            <h2 id="dra-jessica">DRA JESSICA</h2>
+            <div class="actions-bar">
+                <button class="btn-print" onclick="imprimirSecao('jessica')">Imprimir Dra. Jessica</button>
+                <button class="btn-pdf" onclick="gerarPDF('jessica')">PDF Dra. Jessica</button>
+                <button class="btn-clear" onclick="limparSecao('jessica')">Limpar Dados</button>
+            </div>
+            <table id="table-jessica">
+                <thead>
+                    <tr>
+                        <th>DATA</th><th>NOME</th><th>VALOR (R$)</th><th>PAGAMENTO</th><th>RETIRADAS (R$)</th>
+                    </tr>
+                </thead>
+                <tbody id="body-jessica"></tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td colspan="2">VALOR LÍQUIDO:</td>
+                        <td colspan="3" id="total-jessica">R$ 0,00</td>
+                    </tr>
+                </tfoot>
+            </table>
+            <button class="btn-add" onclick="novaLinha('jessica')">+ Adicionar Linha</button>
+
+            <h2 id="dra-giovana">DRA GIOVANA</h2>
+            <div class="actions-bar">
+                <button class="btn-print" onclick="imprimirSecao('giovana')">Imprimir Dra. Giovana</button>
+                <button class="btn-pdf" onclick="gerarPDF('giovana')">PDF Dra. Giovana</button>
+                <button class="btn-clear" onclick="limparSecao('giovana')">Limpar Dados</button>
+            </div>
+            <table id="table-giovana">
+                <thead>
+                    <tr>
+                        <th>DATA</th><th>NOME</th><th>VALOR (R$)</th><th>PAGAMENTO</th><th>RETIRADAS (R$)</th>
+                    </tr>
+                </thead>
+                <tbody id="body-giovana"></tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td colspan="2">VALOR LÍQUIDO:</td>
+                        <td colspan="3" id="total-giovana">R$ 0,00</td>
+                    </tr>
+                </tfoot>
+            </table>
+            <button class="btn-add" onclick="novaLinha('giovana')">+ Adicionar Linha</button>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyC2ni483LO-bGFPQcGweazXCqsMl6_tEzk",
+            authDomain: "planilha-de-pagamentos-41a6e.firebaseapp.com",
+            databaseURL: "https://planilha-de-pagamentos-41a6e-default-rtdb.firebaseio.com",
+            projectId: "planilha-de-pagamentos-41a6e",
+            storageBucket: "planilha-de-pagamentos-41a6e.firebasestorage.app",
+            messagingSenderId: "650651485458",
+            appId: "1:650651485458:web:a392952fe633766921dfcb"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-app').style.display = 'block';
+                document.body.style.background = "#f4f4f4";
+                carregarDados();
+            } else {
+                document.getElementById('login-screen').style.display = 'block';
+                document.getElementById('main-app').style.display = 'none';
+                document.body.style.background = "#2c3e50";
+            }
+        });
+
+        function entrar() {
+            const e = document.getElementById('email').value;
+            const s = document.getElementById('password').value;
+            auth.signInWithEmailAndPassword(e, s).catch(() => {
+                document.getElementById('erro-msg').innerText = "Acesso Negado";
+            });
+        }
+
+        function sair() { auth.signOut(); }
+
+        function novaLinha(doc, dados = null) {
+            const tbody = document.getElementById(`body-${doc}`);
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><input type="date" value="${dados?.data || ''}" onchange="salvar()"></td>
+                <td><input type="text" value="${dados?.nome || ''}" oninput="salvar()"></td>
+                <td><input type="number" step="0.01" class="val-in" value="${dados?.valor || ''}" oninput="salvar()"></td>
+                <td>
+                    <select onchange="salvar()">
+                        <option value="">Selecione</option>
+                        <option value="Dinheiro" ${dados?.pgto === 'Dinheiro' ? 'selected' : ''}>Dinheiro</option>
+                        <option value="PIX" ${dados?.pgto === 'PIX' ? 'selected' : ''}>PIX</option>
+                        <option value="Débito" ${dados?.pgto === 'Débito' ? 'selected' : ''}>Débito</option>
+                        <option value="Crédito" ${dados?.pgto === 'Crédito' ? 'selected' : ''}>Crédito</option>
+                    </select>
+                </td>
+                <td><input type="number" step="0.01" class="ret-in" value="${dados?.retirada || ''}" oninput="salvar()"></td>
+            `;
+            tbody.appendChild(tr);
+            calcular(doc);
+        }
+
+        function calcular(doc) {
+            let v = 0, r = 0;
+            document.querySelectorAll(`#body-${doc} .val-in`).forEach(i => v += parseFloat(i.value) || 0);
+            document.querySelectorAll(`#body-${doc} .ret-in`).forEach(i => r += parseFloat(i.value) || 0);
+            document.getElementById(`total-${doc}`).innerText = `R$ ${(v - r).toFixed(2).replace('.', ',')}`;
+        }
+
+        function salvar() {
+            const dados = { jessica: [], giovana: [] };
+            ['jessica', 'giovana'].forEach(doc => {
+                document.querySelectorAll(`#body-${doc} tr`).forEach(tr => {
+                    const inp = tr.querySelectorAll('input, select');
+                    dados[doc].push({ data: inp[0].value, nome: inp[1].value, valor: inp[2].value, pgto: inp[3].value, retirada: inp[4].value });
+                });
+                calcular(doc);
+            });
+            db.ref('dados_finais').set(dados);
+        }
+
+        function carregarDados() {
+            db.ref('dados_finais').once('value').then(snap => {
+                const d = snap.val();
+                ['jessica', 'giovana'].forEach(doc => {
+                    document.getElementById(`body-${doc}`).innerHTML = "";
+                    if (d && d[doc]) d[doc].forEach(obj => novaLinha(doc, obj));
+                    else novaLinha(doc);
+                });
+            });
+        }
+
+        function limparSecao(doc) {
+            if (confirm("Deseja apagar os dados desta tabela?")) {
+                document.getElementById(`body-${doc}`).innerHTML = "";
+                novaLinha(doc);
+                salvar();
+            }
+        }
+
+        function imprimirSecao(doc) {
+            const outra = doc === 'jessica' ? 'giovana' : 'jessica';
+            document.getElementById(`dra-${outra}`).style.display = 'none';
+            document.getElementById(`table-${outra}`).style.display = 'none';
+            document.querySelectorAll(`.actions-bar`).forEach(b => b.style.display = 'none');
+            document.querySelectorAll(`.btn-add`).forEach(b => b.style.display = 'none');
+            
+            window.print();
+            
+            // Volta ao normal
+            location.reload();
+        }
+
+        function gerarPDF(docName) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Título do PDF
+            doc.setFontSize(16);
+            doc.text(`RELATÓRIO DE PAGAMENTOS - DRA. ${docName.toUpperCase()}`, 14, 15);
+            
+            const rows = [];
+            document.querySelectorAll(`#body-${docName} tr`).forEach(tr => {
+                const i = tr.querySelectorAll('input, select');
+                // Formata a data e valores para o PDF ficar bonito
+                const dataFormatada = i[0].value.split('-').reverse().join('/');
+                rows.push([
+                    dataFormatada, 
+                    i[1].value, 
+                    "R$ " + (parseFloat(i[2].value) || 0).toFixed(2).replace('.', ','), 
+                    i[3].value, 
+                    "R$ " + (parseFloat(i[4].value) || 0).toFixed(2).replace('.', ',')
+                ]);
+            });
+
+            // Pega o valor líquido calculado na tela
+            const valorLiquido = document.getElementById(`total-${docName}`).innerText;
+
+            doc.autoTable({
+                head: [['DATA', 'NOME', 'VALOR', 'PAGAMENTO', 'RETIRADA']],
+                body: rows,
+                startY: 22,
+                theme: 'grid',
+                headStyles: { fillColor: [44, 62, 80] }, // Azul escuro no cabeçalho
+                didDrawPage: function (data) {
+                    // Adiciona o Valor Líquido ao final da tabela
+                    let finalY = data.cursor.y + 10;
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'bold');
+                    doc.text(`VALOR LÍQUIDO A RECEBER: ${valorLiquido}`, 14, finalY);
+                }
+            });
+            
+            doc.save(`planilha_${docName}.pdf`);
+        }
+    </script>
+</body>
+</html>
