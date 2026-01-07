@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema Financeiro - Dra. Jessica & Giovana</title>
+    <title>Sistema Financeiro Real-Time - Dra. Jessica & Giovana</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
@@ -39,6 +39,12 @@
         
         .total-row { background: #e9ecef; font-weight: bold; font-size: 1.1em; }
 
+        @media screen and (max-width: 600px) {
+            table { display: block; overflow-x: auto; white-space: nowrap; }
+            .container { padding: 10px; }
+            h1 { font-size: 1.2rem; }
+        }
+
         @media print {
             .btn-add, .actions-bar, .btn-logout, #login-screen, .btn-clear { display: none !important; }
             body { background: white; padding: 0; }
@@ -60,19 +66,17 @@
     <div id="main-app">
         <div class="container">
             <button class="btn-logout" onclick="sair()">Sair</button>
-            <h1>PLANILHA DE PAGAMENTOS DA SEMANA</h1>
+            <h1>PLANILHA DE PAGAMENTOS EM TEMPO REAL</h1>
 
             <h2 id="dra-jessica">DRA JESSICA</h2>
             <div class="actions-bar">
-                <button class="btn-print" onclick="imprimirSecao('jessica')">Imprimir Dra. Jessica</button>
-                <button class="btn-pdf" onclick="gerarPDF('jessica')">PDF Dra. Jessica</button>
+                <button class="btn-print" onclick="imprimirSecao('jessica')">Imprimir</button>
+                <button class="btn-pdf" onclick="gerarPDF('jessica')">Salvar PDF</button>
                 <button class="btn-clear" onclick="limparSecao('jessica')">Limpar Dados</button>
             </div>
             <table id="table-jessica">
                 <thead>
-                    <tr>
-                        <th>DATA</th><th>NOME</th><th>VALOR (R$)</th><th>PAGAMENTO</th><th>RETIRADAS (R$)</th>
-                    </tr>
+                    <tr><th>DATA</th><th>NOME</th><th>VALOR (R$)</th><th>PAGAMENTO</th><th>RETIRADAS (R$)</th></tr>
                 </thead>
                 <tbody id="body-jessica"></tbody>
                 <tfoot>
@@ -82,19 +86,17 @@
                     </tr>
                 </tfoot>
             </table>
-            <button class="btn-add" onclick="novaLinha('jessica')">+ Adicionar Linha</button>
+            <button class="btn-add" onclick="novaLinha('jessica')">+ Linha Jessica</button>
 
             <h2 id="dra-giovana">DRA GIOVANA</h2>
             <div class="actions-bar">
-                <button class="btn-print" onclick="imprimirSecao('giovana')">Imprimir Dra. Giovana</button>
-                <button class="btn-pdf" onclick="gerarPDF('giovana')">PDF Dra. Giovana</button>
+                <button class="btn-print" onclick="imprimirSecao('giovana')">Imprimir</button>
+                <button class="btn-pdf" onclick="gerarPDF('giovana')">Salvar PDF</button>
                 <button class="btn-clear" onclick="limparSecao('giovana')">Limpar Dados</button>
             </div>
             <table id="table-giovana">
                 <thead>
-                    <tr>
-                        <th>DATA</th><th>NOME</th><th>VALOR (R$)</th><th>PAGAMENTO</th><th>RETIRADAS (R$)</th>
-                    </tr>
+                    <tr><th>DATA</th><th>NOME</th><th>VALOR (R$)</th><th>PAGAMENTO</th><th>RETIRADAS (R$)</th></tr>
                 </thead>
                 <tbody id="body-giovana"></tbody>
                 <tfoot>
@@ -104,7 +106,7 @@
                     </tr>
                 </tfoot>
             </table>
-            <button class="btn-add" onclick="novaLinha('giovana')">+ Adicionar Linha</button>
+            <button class="btn-add" onclick="novaLinha('giovana')">+ Linha Giovana</button>
         </div>
     </div>
 
@@ -123,12 +125,14 @@
         const auth = firebase.auth();
         const db = firebase.database();
 
+        let isSyncing = false; // Bloqueio para não sobrescrever enquanto digita
+
         auth.onAuthStateChanged(user => {
             if (user) {
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('main-app').style.display = 'block';
                 document.body.style.background = "#f4f4f4";
-                carregarDados();
+                configurarEscutaTempoReal();
             } else {
                 document.getElementById('login-screen').style.display = 'block';
                 document.getElementById('main-app').style.display = 'none';
@@ -139,9 +143,7 @@
         function entrar() {
             const e = document.getElementById('email').value;
             const s = document.getElementById('password').value;
-            auth.signInWithEmailAndPassword(e, s).catch(() => {
-                document.getElementById('erro-msg').innerText = "Acesso Negado";
-            });
+            auth.signInWithEmailAndPassword(e, s).catch(() => document.getElementById('erro-msg').innerText = "Erro no Login");
         }
 
         function sair() { auth.signOut(); }
@@ -176,6 +178,7 @@
         }
 
         function salvar() {
+            isSyncing = true; // Avisa que EU estou mudando os dados agora
             const dados = { jessica: [], giovana: [] };
             ['jessica', 'giovana'].forEach(doc => {
                 document.querySelectorAll(`#body-${doc} tr`).forEach(tr => {
@@ -184,81 +187,53 @@
                 });
                 calcular(doc);
             });
-            db.ref('dados_finais').set(dados);
+            db.ref('dados_finais').set(dados).then(() => {
+                setTimeout(() => { isSyncing = false; }, 1000); // Libera sincronização após 1 seg
+            });
         }
 
-        function carregarDados() {
-            db.ref('dados_finais').once('value').then(snap => {
+        function configurarEscutaTempoReal() {
+            db.ref('dados_finais').on('value', snap => {
+                if (isSyncing) return; // Se eu estiver digitando, não atualiza a tela para não travar
+                
                 const d = snap.val();
                 ['jessica', 'giovana'].forEach(doc => {
-                    document.getElementById(`body-${doc}`).innerHTML = "";
+                    const tbody = document.getElementById(`body-${doc}`);
+                    tbody.innerHTML = "";
                     if (d && d[doc]) d[doc].forEach(obj => novaLinha(doc, obj));
-                    else novaLinha(doc);
+                    else if (tbody.children.length === 0) novaLinha(doc);
+                    calcular(doc);
                 });
             });
         }
 
         function limparSecao(doc) {
-            if (confirm("Deseja apagar os dados desta tabela?")) {
-                document.getElementById(`body-${doc}`).innerHTML = "";
-                novaLinha(doc);
-                salvar();
+            if (confirm("Apagar dados desta tabela?")) {
+                isSyncing = false;
+                db.ref(`dados_finais/${doc}`).remove();
             }
         }
 
         function imprimirSecao(doc) {
-            const outra = doc === 'jessica' ? 'giovana' : 'jessica';
-            document.getElementById(`dra-${outra}`).style.display = 'none';
-            document.getElementById(`table-${outra}`).style.display = 'none';
-            document.querySelectorAll(`.actions-bar`).forEach(b => b.style.display = 'none');
-            document.querySelectorAll(`.btn-add`).forEach(b => b.style.display = 'none');
-            
             window.print();
-            
-            // Volta ao normal
-            location.reload();
         }
 
         function gerarPDF(docName) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            
-            // Título do PDF
-            doc.setFontSize(16);
-            doc.text(`RELATÓRIO DE PAGAMENTOS - DRA. ${docName.toUpperCase()}`, 14, 15);
-            
+            const valorLiquido = document.getElementById(`total-${docName}`).innerText;
+            doc.text(`DRA ${docName.toUpperCase()} - PAGAMENTOS`, 14, 15);
             const rows = [];
             document.querySelectorAll(`#body-${docName} tr`).forEach(tr => {
                 const i = tr.querySelectorAll('input, select');
-                // Formata a data e valores para o PDF ficar bonito
-                const dataFormatada = i[0].value.split('-').reverse().join('/');
-                rows.push([
-                    dataFormatada, 
-                    i[1].value, 
-                    "R$ " + (parseFloat(i[2].value) || 0).toFixed(2).replace('.', ','), 
-                    i[3].value, 
-                    "R$ " + (parseFloat(i[4].value) || 0).toFixed(2).replace('.', ',')
-                ]);
+                rows.push([i[0].value, i[1].value, i[2].value, i[3].value, i[4].value]);
             });
-
-            // Pega o valor líquido calculado na tela
-            const valorLiquido = document.getElementById(`total-${docName}`).innerText;
-
-            doc.autoTable({
-                head: [['DATA', 'NOME', 'VALOR', 'PAGAMENTO', 'RETIRADA']],
-                body: rows,
+            doc.autoTable({ 
+                head: [['DATA', 'NOME', 'VALOR', 'PAGAMENTO', 'RETIRADA']], 
+                body: rows, 
                 startY: 22,
-                theme: 'grid',
-                headStyles: { fillColor: [44, 62, 80] }, // Azul escuro no cabeçalho
-                didDrawPage: function (data) {
-                    // Adiciona o Valor Líquido ao final da tabela
-                    let finalY = data.cursor.y + 10;
-                    doc.setFontSize(12);
-                    doc.setFont(undefined, 'bold');
-                    doc.text(`VALOR LÍQUIDO A RECEBER: ${valorLiquido}`, 14, finalY);
-                }
+                didDrawPage: (d) => doc.text(`TOTAL LÍQUIDO: ${valorLiquido}`, 14, doc.lastAutoTable.finalY + 10)
             });
-            
             doc.save(`planilha_${docName}.pdf`);
         }
     </script>
