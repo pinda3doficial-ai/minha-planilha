@@ -7,6 +7,7 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
@@ -125,7 +126,7 @@
         const auth = firebase.auth();
         const db = firebase.database();
 
-        let isSyncing = false; // Bloqueio para não sobrescrever enquanto digita
+        let isSyncing = false;
 
         auth.onAuthStateChanged(user => {
             if (user) {
@@ -178,7 +179,7 @@
         }
 
         function salvar() {
-            isSyncing = true; // Avisa que EU estou mudando os dados agora
+            isSyncing = true;
             const dados = { jessica: [], giovana: [] };
             ['jessica', 'giovana'].forEach(doc => {
                 document.querySelectorAll(`#body-${doc} tr`).forEach(tr => {
@@ -188,14 +189,13 @@
                 calcular(doc);
             });
             db.ref('dados_finais').set(dados).then(() => {
-                setTimeout(() => { isSyncing = false; }, 1000); // Libera sincronização após 1 seg
+                setTimeout(() => { isSyncing = false; }, 1000);
             });
         }
 
         function configurarEscutaTempoReal() {
             db.ref('dados_finais').on('value', snap => {
-                if (isSyncing) return; // Se eu estiver digitando, não atualiza a tela para não travar
-                
+                if (isSyncing) return;
                 const d = snap.val();
                 ['jessica', 'giovana'].forEach(doc => {
                     const tbody = document.getElementById(`body-${doc}`);
@@ -218,23 +218,44 @@
             window.print();
         }
 
+        // FUNÇÃO CORRIGIDA
         function gerarPDF(docName) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
+            
             const valorLiquido = document.getElementById(`total-${docName}`).innerText;
-            doc.text(`DRA ${docName.toUpperCase()} - PAGAMENTOS`, 14, 15);
+            const titulo = `DRA ${docName.toUpperCase()} - RELATÓRIO DE PAGAMENTOS`;
+            
+            doc.setFontSize(16);
+            doc.text(titulo, 14, 15);
+            
             const rows = [];
             document.querySelectorAll(`#body-${docName} tr`).forEach(tr => {
                 const i = tr.querySelectorAll('input, select');
-                rows.push([i[0].value, i[1].value, i[2].value, i[3].value, i[4].value]);
+                rows.push([
+                    i[0].value || '', 
+                    i[1].value || '', 
+                    i[2].value || '0', 
+                    i[3].value || '', 
+                    i[4].value || '0'
+                ]);
             });
+
             doc.autoTable({ 
-                head: [['DATA', 'NOME', 'VALOR', 'PAGAMENTO', 'RETIRADA']], 
+                head: [['DATA', 'NOME', 'VALOR (R$)', 'PAGAMENTO', 'RETIRADA (R$)']], 
                 body: rows, 
-                startY: 22,
-                didDrawPage: (d) => doc.text(`TOTAL LÍQUIDO: ${valorLiquido}`, 14, doc.lastAutoTable.finalY + 10)
+                startY: 25,
+                theme: 'striped',
+                headStyles: { fillColor: [44, 62, 80] },
+                margin: { top: 25 }
             });
-            doc.save(`planilha_${docName}.pdf`);
+
+            const finalY = doc.lastAutoTable.finalY || 30;
+            doc.setFontSize(12);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`VALOR LÍQUIDO FINAL: ${valorLiquido}`, 14, finalY + 10);
+
+            doc.save(`relatorio_${docName}.pdf`);
         }
     </script>
 </body>
